@@ -1,26 +1,147 @@
+/* "Cause" is not in next/font/google, load it directly */
+@import url('https://fonts.googleapis.com/css2?family=Cause:wght@100..900&display=swap');
+
 @import "tailwindcss";
 
+/* ─── Design tokens ─────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --app-bg: #1c1c1c;
+  --app-panel: #242424;
+  --app-soft: #303030;
+  --app-line: #424242;
+  --app-accent: yellowgreen;
+  --app-text: #ffffff;
+  font-family: var(--font-playwrite), 'Cause', ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--app-bg);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-bg: #f5f7fb;
+  --app-panel: #ffffff;
+  --app-soft: #f1f5f9;
+  --app-line: #cbd5e1;
+  --app-accent: yellowgreen;
+  --app-text: #0f172a;
+}
+
+/* ─── Tailwind v4 theme mapping ─────────────────────────────── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-app-bg: var(--app-bg);
+  --color-app-panel: var(--app-panel);
+  --color-app-soft: var(--app-soft);
+  --color-app-line: var(--app-line);
+  --color-app-accent: var(--app-accent);
+  --color-app-text: var(--app-text);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ─── Base resets ───────────────────────────────────────────── */
+body {
+  margin: 0;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+/* ─── Component classes ─────────────────────────────────────── */
+@layer components {
+  .tab {
+    @apply rounded px-4 py-2 text-sm font-medium text-zinc-300 transition hover:text-white;
+  }
+
+  .tab-active {
+    @apply bg-app-accent text-black hover:text-black;
+  }
+
+  .field {
+    @apply mb-4 block;
+  }
+
+  .field span {
+    @apply mb-2 block text-sm font-medium text-zinc-300;
+  }
+
+  .field input,
+  .field textarea {
+    @apply w-full resize-none rounded-md border border-app-line bg-app-soft px-3 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-app-accent;
+  }
+
+  .primary-button {
+    @apply rounded-md bg-app-accent px-4 py-3 font-semibold text-black transition hover:brightness-110;
+  }
+
+  .secondary-button,
+  .ghost-button,
+  .danger-button {
+    @apply rounded-md border px-3 py-2 text-sm font-medium transition;
+  }
+
+  .secondary-button {
+    @apply border-app-line bg-app-soft text-white hover:border-app-accent;
+  }
+
+  .ghost-button {
+    @apply border-app-line text-zinc-300 hover:text-white;
+  }
+
+  .danger-button {
+    @apply border-red-500/40 bg-red-500/10 text-red-500 hover:border-red-400;
+  }
+
+  .task-card {
+    @apply cursor-grab rounded-lg border border-app-line bg-app-soft p-4 shadow-sm transition hover:border-app-accent active:cursor-grabbing;
+  }
+
+  .status {
+    @apply shrink-0 rounded-full border border-app-accent px-2.5 py-1 text-xs font-semibold text-app-accent;
+  }
+
+  .status-done {
+    @apply bg-app-accent text-black;
+  }
+
+  .empty-state {
+    @apply flex min-h-40 flex-1 items-center justify-center rounded-lg border border-dashed border-app-line px-5 text-center text-sm text-zinc-400;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─── Light-theme overrides ─────────────────────────────────── */
+:root[data-theme="light"] .tab {
+  @apply text-slate-600 hover:text-slate-900;
+}
+
+:root[data-theme="light"] .tab-active {
+  @apply text-white hover:text-white;
+}
+
+:root[data-theme="light"] .field span {
+  @apply text-slate-700;
+}
+
+:root[data-theme="light"] .field input,
+:root[data-theme="light"] .field textarea,
+:root[data-theme="light"] .secondary-button {
+  @apply text-slate-900;
+}
+
+:root[data-theme="light"] .ghost-button {
+  @apply text-slate-700 hover:text-slate-900;
+}
+
+:root[data-theme="light"] .empty-state {
+  @apply text-slate-500;
 }
