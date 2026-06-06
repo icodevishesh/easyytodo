@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Coffee, Zap, Timer } from "lucide-react";
+import { Play, Pause, RotateCcw, Coffee, Zap, Timer, Settings2, Pencil } from "lucide-react";
 import {
   startPomodoroSession,
   endPomodoroSession,
@@ -28,6 +28,13 @@ const MODE_DURATIONS: Record<Mode, number> = {
   long_break: 15 * 60,
 };
 
+// Default durations in minutes (user-editable)
+const DEFAULT_MINUTES: Record<Mode, number> = {
+  work: 25,
+  short_break: 5,
+  long_break: 15,
+};
+
 const MODE_COLORS: Record<Mode, string> = {
   work: "var(--app-accent)",
   short_break: "#60a5fa",
@@ -52,6 +59,8 @@ interface PersistedState {
   sessionId: string | null;
   pomodorosDone: number;
   soundEnabled: boolean;
+  /** user-set durations in minutes, keyed by mode */
+  customMinutes: Record<Mode, number>;
 }
 
 function defaultState(): PersistedState {
@@ -59,11 +68,12 @@ function defaultState(): PersistedState {
     mode: "work",
     runStartedAt: null,
     elapsedBeforeRun: 0,
-    totalDuration: MODE_DURATIONS.work,
+    totalDuration: DEFAULT_MINUTES.work * 60,
     selectedTodoId: "",
     sessionId: null,
     pomodorosDone: 0,
     soundEnabled: true,
+    customMinutes: { ...DEFAULT_MINUTES },
   };
 }
 
@@ -189,9 +199,19 @@ export default function PomodoroTimer({
   // Derived display state
   const [secondsLeft, setSecondsLeft] = useState(() => computeSecondsLeft(loadState()));
 
+
+
   // DB / UI state (not persisted — refetched on mount)
   const [sessions, setSessions] = useState<PomodoroSession[]>([]);
   const [goalMinutes, setGoalMinutes] = useState<Record<string, number>>({});
+  const [showSettings, setShowSettings] = useState(false);
+  const [editingTime, setEditingTime] = useState(false);
+  const [editMinutes, setEditMinutes] = useState(0);
+  const [editSeconds, setEditSeconds] = useState(0);
+  // Draft for settings inputs (uncommitted until Save)
+  const [draftMinutes, setDraftMinutes] = useState<Record<Mode, number>>(() => ({
+    ...defaultState().customMinutes,
+  }));
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -411,7 +431,8 @@ export default function PomodoroTimer({
         sessionId: null,
       }));
     }
-    setSecondsLeft(ps.totalDuration);
+    const resetDuration = (ps.customMinutes[ps.mode] ?? DEFAULT_MINUTES[ps.mode]) * 60;
+    setSecondsLeft(resetDuration);
   };
 
   const switchMode = async (newMode: Mode) => {
@@ -420,7 +441,7 @@ export default function PomodoroTimer({
       setPs((prev) => ({ ...prev, runStartedAt: null }));
       await handleTimerEnd(true, snapshot);
     }
-    const newDuration = MODE_DURATIONS[newMode];
+    const newDuration = (ps.customMinutes[newMode] ?? DEFAULT_MINUTES[newMode]) * 60;
     setPs((prev) => ({
       ...prev,
       mode: newMode,
@@ -430,6 +451,61 @@ export default function PomodoroTimer({
       sessionId: null,
     }));
     setSecondsLeft(newDuration);
+  };
+
+  const openSettings = () => {
+    setDraftMinutes({ ...ps.customMinutes });
+    setShowSettings(true);
+  };
+
+  const openEditTime = () => {
+    if (isRunning) return; // don't allow edit while running
+    setEditMinutes(Math.floor(secondsLeft / 60));
+    setEditSeconds(secondsLeft % 60);
+    setEditingTime(true);
+  };
+
+  const confirmEditTime = () => {
+    const mins = Math.max(0, Math.min(180, editMinutes));
+    const secs = Math.max(0, Math.min(59, editSeconds));
+    const newTotal = mins * 60 + secs;
+    if (newTotal < 1) return; // refuse 0:00
+    setPs((prev) => ({
+      ...prev,
+      totalDuration: newTotal,
+      elapsedBeforeRun: 0,
+      runStartedAt: null,
+      sessionId: null,
+    }));
+    setSecondsLeft(newTotal);
+    setEditingTime(false);
+  };
+
+  const cancelEditTime = () => setEditingTime(false);
+
+  const saveSettings = async () => {    // Clamp values: 1–180 min
+    const clamped: Record<Mode, number> = {
+      work: Math.min(180, Math.max(1, draftMinutes.work)),
+      short_break: Math.min(60, Math.max(1, draftMinutes.short_break)),
+      long_break: Math.min(120, Math.max(1, draftMinutes.long_break)),
+    };
+    // If running, stop first
+    if (isRunning) {
+      const snapshot = { ...ps };
+      setPs((prev) => ({ ...prev, runStartedAt: null }));
+      await handleTimerEnd(true, snapshot);
+    }
+    const newDuration = clamped[ps.mode] * 60;
+    setPs((prev) => ({
+      ...prev,
+      customMinutes: clamped,
+      runStartedAt: null,
+      elapsedBeforeRun: 0,
+      totalDuration: newDuration,
+      sessionId: null,
+    }));
+    setSecondsLeft(newDuration);
+    setShowSettings(false);
   };
 
   // ── Derived display values ────────────────────────────────────
@@ -445,52 +521,159 @@ export default function PomodoroTimer({
   );
 
   return (
-    <section className="py-6 grid gap-6 max-w-2xl mx-auto">
+    <section className="py-6 grid gap-12 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Timer size={20} className="text-app-accent" />
-            Pomodoro
-          </h2>
-          <p className="text-sm text-zinc-400 mt-0.5">
-            Stay focused, one session at a time.
-          </p>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Timer size={20} className="text-app-accent" />
+              Pomodoro
+            </h2>
+            <p className="text-sm text-zinc-400 mt-0.5">
+              Stay focused, one session at a time.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const ctx = getAudioCtx();
+                void ctx;
+                setPs((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }));
+              }}
+              className="ghost-button text-xs flex items-center gap-1.5"
+              title={ps.soundEnabled ? "Mute sounds" : "Enable sounds"}
+            >
+              {ps.soundEnabled ? "🔔" : "🔕"} Sound
+            </button>
+            {/* <button
+              type="button"
+              onClick={openEditTime}
+              disabled={isRunning}
+              className={`ghost-button p-2 rounded-md ${editingTime ? "text-app-accent border-app-accent" : ""} disabled:opacity-40 disabled:cursor-not-allowed`}
+              title={isRunning ? "Pause to edit time" : "Set custom time"}
+            >
+              <Pencil size={16} />
+            </button> */}
+            <button
+              type="button"
+              onClick={openSettings}
+              className={`ghost-button p-2 rounded-md ${showSettings ? "text-app-accent border-app-accent" : ""}`}
+              title="Customize default durations"
+            >
+              <Settings2 size={16} />
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const ctx = getAudioCtx(); // unlock audio on interaction
-            void ctx;
-            setPs((prev) => ({ ...prev, soundEnabled: !prev.soundEnabled }));
-          }}
-          className="ghost-button text-xs flex items-center gap-1.5"
-          title={ps.soundEnabled ? "Mute sounds" : "Enable sounds"}
-        >
-          {ps.soundEnabled ? "🔔" : "🔕"} Sound
-        </button>
-      </div>
 
-      {/* Mode tabs */}
-      <div className="flex rounded-lg border border-app-line bg-app-panel p-1 gap-1">
-        {(["work", "short_break", "long_break"] as Mode[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => switchMode(m)}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
-              ps.mode === m
-                ? "bg-app-soft text-white shadow-sm"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            {MODE_LABELS[m]}
-          </button>
-        ))}
-      </div>
+        {/* Inline time editor */}
+        {editingTime && (
+          <div className="rounded-lg border border-app-accent/40 bg-app-panel px-5 py-4 flex items-center gap-4">
+            <Pencil size={14} className="text-app-accent shrink-0" />
+            <span className="text-sm text-zinc-300 shrink-0">Set time</span>
+            <div className="flex items-center gap-1.5 flex-1">
+              <input
+                type="number" min={0} max={180}
+                value={editMinutes}
+                onChange={e => setEditMinutes(Math.max(0, Math.min(180, parseInt(e.target.value) || 0)))}
+                onKeyDown={e => { if (e.key === "Enter") confirmEditTime(); if (e.key === "Escape") cancelEditTime(); }}
+                autoFocus
+                className="w-16 rounded-md border border-app-line bg-app-soft px-2 py-1.5 text-sm text-white text-center outline-none transition focus:border-app-accent tabular-nums"
+              />
+              <span className="text-zinc-400 font-bold">:</span>
+              <input
+                type="number" min={0} max={59}
+                value={String(editSeconds).padStart(2, "0")}
+                onChange={e => setEditSeconds(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                onKeyDown={e => { if (e.key === "Enter") confirmEditTime(); if (e.key === "Escape") cancelEditTime(); }}
+                className="w-16 rounded-md border border-app-line bg-app-soft px-2 py-1.5 text-sm text-white text-center outline-none transition focus:border-app-accent tabular-nums"
+              />
+              <span className="text-xs text-zinc-500 ml-1">mm : ss</span>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button type="button" onClick={cancelEditTime} className="ghost-button text-xs px-3 py-1.5">Cancel</button>
+              <button type="button" onClick={confirmEditTime} className="primary-button text-xs px-4 py-1.5">Set</button>
+            </div>
+          </div>
+        )}
 
-      {/* Timer ring */}
-      <div className="flex flex-col items-center gap-6">
+        {/* Settings panel */}
+        {showSettings && (
+          <div className="rounded-lg border border-app-accent/40 bg-app-panel p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                <Settings2 size={14} className="text-app-accent" /> Timer durations
+              </h3>
+              <button type="button" onClick={() => setShowSettings(false)} className="ghost-button text-xs">Cancel</button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {(["work", "short_break", "long_break"] as Mode[]).map((m) => (
+                <div key={m}>
+                  <label className="block text-xs text-zinc-400 mb-1.5">{MODE_LABELS[m]}</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={m === "work" ? 180 : m === "long_break" ? 120 : 60}
+                      value={draftMinutes[m]}
+                      onChange={(e) =>
+                        setDraftMinutes((prev) => ({
+                          ...prev,
+                          [m]: parseInt(e.target.value) || 1,
+                        }))
+                      }
+                      className="w-full rounded-md border border-app-line bg-app-soft px-2 py-2 text-sm text-white text-center outline-none transition focus:border-app-accent tabular-nums"
+                    />
+                    <span className="text-xs text-zinc-500 shrink-0">min</span>
+                  </div>
+                  <p className="text-xs text-zinc-600 mt-1">
+                    default: {DEFAULT_MINUTES[m]}m
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftMinutes({ ...DEFAULT_MINUTES });
+                }}
+                className="ghost-button text-xs"
+              >
+                Reset defaults
+              </button>
+              <button
+                type="button"
+                onClick={saveSettings}
+                className="primary-button text-sm px-5 py-2"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mode tabs */}
+        <div className="flex rounded-lg border border-app-line bg-app-panel p-1 gap-1">
+          {(["work", "short_break", "long_break"] as Mode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => switchMode(m)}
+              className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
+                ps.mode === m
+                  ? "bg-app-soft text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              {MODE_LABELS[m]}
+            </button>
+          ))}
+        </div>
+
+        {/* Timer ring */}
+        <div className="flex flex-col items-center gap-6">
         <div
           className="relative flex items-center justify-center"
           style={{ width: 220, height: 220 }}
@@ -541,6 +724,7 @@ export default function PomodoroTimer({
               </span>
             )}
           </div>
+          
         </div>
 
         {/* Controls */}
@@ -583,7 +767,11 @@ export default function PomodoroTimer({
             {ps.mode === "work" ? <Zap size={18} /> : <Coffee size={18} />}
           </div>
         </div>
+      
+      
+      
       </div>
+      
 
       {/* Todo selector (work mode only) */}
       {ps.mode === "work" && (
@@ -615,7 +803,48 @@ export default function PomodoroTimer({
           )}
         </div>
       )}
+      </div>
 
+      <div className="flex flex-col gap-6">
+      {/* Recent sessions */}
+      {sessions.length > 0 && (
+        <div className="rounded-lg border border-app-line bg-app-panel p-4">
+          <h3 className="text-sm font-semibold text-zinc-300 mb-3">
+            Recent sessions
+          </h3>
+          <div className="flex flex-col gap-2 max-h-52 overflow-y-auto no-scrollbar">
+            {sessions.slice(0, 10).map((s) => {
+              const todo = todos.find((t) => t.id === s.todoId);
+              const goal = goals.find((g) => g.id === s.weeklyGoalId);
+              return (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 rounded-md bg-app-soft px-3 py-2 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-zinc-200 font-medium">
+                      {todo?.title ?? "Unknown task"}
+                    </p>
+                    {goal && (
+                      <p className="truncate text-zinc-500 mt-0.5">
+                        {goal.title}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-app-accent font-semibold">
+                      {fmtMinutes(s.durationMinutes ?? 0)}
+                    </p>
+                    {s.interrupted && (
+                      <p className="text-zinc-500">interrupted</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* Weekly goal progress */}
       {activeGoals.length > 0 && (
         <div className="rounded-lg border border-app-line bg-app-panel p-4">
@@ -656,46 +885,7 @@ export default function PomodoroTimer({
           </div>
         </div>
       )}
-
-      {/* Recent sessions */}
-      {sessions.length > 0 && (
-        <div className="rounded-lg border border-app-line bg-app-panel p-4">
-          <h3 className="text-sm font-semibold text-zinc-300 mb-3">
-            Recent sessions
-          </h3>
-          <div className="flex flex-col gap-2 max-h-52 overflow-y-auto no-scrollbar">
-            {sessions.slice(0, 10).map((s) => {
-              const todo = todos.find((t) => t.id === s.todoId);
-              const goal = goals.find((g) => g.id === s.weeklyGoalId);
-              return (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between gap-3 rounded-md bg-app-soft px-3 py-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-zinc-200 font-medium">
-                      {todo?.title ?? "Unknown task"}
-                    </p>
-                    {goal && (
-                      <p className="truncate text-zinc-500 mt-0.5">
-                        {goal.title}
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-app-accent font-semibold">
-                      {fmtMinutes(s.durationMinutes ?? 0)}
-                    </p>
-                    {s.interrupted && (
-                      <p className="text-zinc-500">interrupted</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      </div>
     </section>
   );
 }
