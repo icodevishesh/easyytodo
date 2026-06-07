@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_ROUTES = ["/login", "/signup"];
+const PUBLIC_ROUTES = ["/login", "/signup", "/forgot-password", "/auth/callback"];
 
 /**
  * Proxy (Next.js 16 equivalent of middleware).

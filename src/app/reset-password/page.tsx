@@ -1,14 +1,13 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { Panda } from "lucide-react";
-import { signIn, type AuthState } from "@/app/actions/auth";
+import { resetPassword, type AuthState } from "@/app/actions/auth";
 import PasswordInput from "@/app/components/PasswordInput";
 
-export default function LoginPage() {
+export default function ResetPasswordPage() {
   const [state, action, pending] = useActionState<AuthState, FormData>(
-    signIn,
+    resetPassword,
     null
   );
 
@@ -22,8 +21,11 @@ export default function LoginPage() {
             easyytodo
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">
-            Welcome back
+            Set new password
           </h1>
+          <p className="text-center text-sm text-zinc-400 max-w-[280px]">
+            Please enter your new password below.
+          </p>
         </div>
 
         {/* Form */}
@@ -36,37 +38,25 @@ export default function LoginPage() {
               {state.error}
             </div>
           )}
-          {state?.info && (
-            <div className="mb-4 rounded-md border border-app-accent/40 bg-app-accent/10 px-3 py-2 text-sm text-app-accent">
-              {state.info}
-            </div>
-          )}
 
           <label className="field">
-            <span>Email</span>
-            <input
-              name="email"
-              type="email"
-              placeholder="you@example.com"
-              autoComplete="email"
+            <span>New Password</span>
+            <PasswordInput
+              name="password"
+              placeholder="Min. 6 characters"
+              autoComplete="new-password"
+              minLength={6}
               required
             />
           </label>
 
           <label className="field">
-            <div className="flex items-center justify-between">
-              <span>Password</span>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-app-accent hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
+            <span>Confirm New Password</span>
             <PasswordInput
-              name="password"
-              placeholder="••••••••"
-              autoComplete="current-password"
+              name="confirmPassword"
+              placeholder="Confirm password"
+              autoComplete="new-password"
+              minLength={6}
               required
             />
           </label>
@@ -76,19 +66,9 @@ export default function LoginPage() {
             disabled={pending}
             className="primary-button mt-2 w-full disabled:opacity-60"
           >
-            {pending ? "Signing in…" : "Sign in"}
+            {pending ? "Updating password…" : "Update password"}
           </button>
         </form>
-
-        <p className="mt-4 text-center text-sm text-zinc-400">
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/signup"
-            className="font-medium text-app-accent hover:underline"
-          >
-            Sign up
-          </Link>
-        </p>
       </div>
     </div>
   );

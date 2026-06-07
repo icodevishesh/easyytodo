@@ -104,3 +104,69 @@ export async function signOut(): Promise<void> {
 
   redirect("/login");
 }
+
+// ── Forgot Password ──────────────────────────────────────────
+
+export async function forgotPassword(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const email = formData.get("email") as string;
+
+  if (!email) {
+    return { error: "Email is required." };
+  }
+
+  // Get the origin dynamically from headers (needed to build redirect link)
+  const { headers } = await import("next/headers");
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const origin = `${protocol}://${host}`;
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return {
+    info: "Check your inbox — we sent you a password reset link. Click it to reset your password.",
+  };
+}
+
+// ── Reset Password ───────────────────────────────────────────
+
+export async function resetPassword(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (!password || !confirmPassword) {
+    return { error: "Both password fields are required." };
+  }
+
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters." };
+  }
+
+  if (password !== confirmPassword) {
+    return { error: "Passwords do not match." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.updateUser({
+    password: password,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  redirect("/");
+}

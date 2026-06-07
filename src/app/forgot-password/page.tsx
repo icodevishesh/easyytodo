@@ -3,12 +3,11 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { Panda } from "lucide-react";
-import { signIn, type AuthState } from "@/app/actions/auth";
-import PasswordInput from "@/app/components/PasswordInput";
+import { forgotPassword, type AuthState } from "@/app/actions/auth";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [state, action, pending] = useActionState<AuthState, FormData>(
-    signIn,
+    forgotPassword,
     null
   );
 
@@ -22,8 +21,11 @@ export default function LoginPage() {
             easyytodo
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--app-text)]">
-            Welcome back
+            Reset your password
           </h1>
+          <p className="text-center text-sm text-zinc-400 max-w-[280px]">
+            Enter your email address and we&apos;ll send you a password reset link.
+          </p>
         </div>
 
         {/* Form */}
@@ -53,40 +55,22 @@ export default function LoginPage() {
             />
           </label>
 
-          <label className="field">
-            <div className="flex items-center justify-between">
-              <span>Password</span>
-              <Link
-                href="/forgot-password"
-                className="text-xs text-app-accent hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <PasswordInput
-              name="password"
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-
           <button
             type="submit"
             disabled={pending}
             className="primary-button mt-2 w-full disabled:opacity-60"
           >
-            {pending ? "Signing in…" : "Sign in"}
+            {pending ? "Sending link…" : "Send reset link"}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-zinc-400">
-          Don&apos;t have an account?{" "}
+          Remember your password?{" "}
           <Link
-            href="/signup"
+            href="/login"
             className="font-medium text-app-accent hover:underline"
           >
-            Sign up
+            Sign in
           </Link>
         </p>
       </div>
